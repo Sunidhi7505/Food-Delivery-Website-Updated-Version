@@ -33,6 +33,20 @@
 
         <div class="split-grid">
           <div>
+            <div class="filter-bar" id="orderFilters">
+              <input id="orderSearch" class="input" placeholder="Search dish or order id" />
+              <select id="orderStatusFilter" class="select">
+                <option value="">All statuses</option>
+                <option value="ACTIVE">In progress</option>
+                <option value="DELIVERED">Delivered</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <select id="orderPeriodFilter" class="select">
+                <option value="">Any time</option>
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+              </select>
+            </div>
             <div id="ordersList"></div>
             <div id="emptyOrders" class="empty" style="display:none;">
               <div>
@@ -52,7 +66,6 @@
       </section>
     </main>
 
-    <div id="chatbotRoot"></div>
     <footer class="footer">Foody 2026.</footer>
   </div>
 </body>

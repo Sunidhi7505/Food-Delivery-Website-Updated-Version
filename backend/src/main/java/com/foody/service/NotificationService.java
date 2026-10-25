@@ -3,6 +3,8 @@ package com.foody.service;
 import com.foody.model.CartItem;
 import com.foody.model.Order;
 import com.foody.model.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -12,6 +14,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class NotificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     private final JavaMailSender mailSender;
 
@@ -58,7 +62,22 @@ public class NotificationService {
         send(order.getUserEmail(), "Foody order delivered - feedback requested", body);
     }
 
+    public void sendPasswordResetEmail(User user, String link, int validMinutes) {
+        if (user == null) {
+            return;
+        }
+        String body = "Hi " + safe(user.getName()) + ",\n\n"
+                + "Use the link below to reset your Foody password. It is valid for " + validMinutes + " minutes "
+                + "and works only once.\n" + link + "\n\n"
+                + "If you did not request this, you can ignore this email.";
+        send(user.getEmail(), "Reset your Foody password", body);
+    }
+
     private void send(String to, String subject, String body) {
+        if (!mailEnabled && to != null) {
+            // Local/dev mode: no SMTP configured, so show the mail in the console instead.
+            log.info("[mail disabled] To: {} | {}\n{}", to, subject, body);
+        }
         if (!mailEnabled || to == null || to.isBlank()) {
             return;
         }

@@ -3,6 +3,7 @@ package com.foody.model;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +21,8 @@ public class User {
     private boolean blocked;
     private List<Address> addresses = new ArrayList<>();
     private List<String> wishlistProductIds = new ArrayList<>();
+    private String resetTokenHash;
+    private LocalDateTime resetTokenExpiry;
 
     public User() {}
 
@@ -89,5 +92,21 @@ public class User {
 
     public void setWishlistProductIds(List<String> wishlistProductIds) {
         this.wishlistProductIds = wishlistProductIds == null ? new ArrayList<>() : wishlistProductIds;
+    }
+
+    public String getResetTokenHash() {
+        return resetTokenHash;
+    }
+
+    public void setResetTokenHash(String resetTokenHash) {
+        this.resetTokenHash = resetTokenHash;
+    }
+
+    public LocalDateTime getResetTokenExpiry() {
+        return resetTokenExpiry;
+    }
+
+    public void setResetTokenExpiry(LocalDateTime resetTokenExpiry) {
+        this.resetTokenExpiry = resetTokenExpiry;
     }
 }

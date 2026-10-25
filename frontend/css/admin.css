@@ -9,8 +9,8 @@
   padding: 18px;
   border-radius: 8px;
   border: 1px solid var(--line);
-  background: white;
-  box-shadow: var(--shadow);
+  background: var(--card);
+  box-shadow: none;
 }
 
 .stat-card span {
@@ -58,7 +58,7 @@
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: white;
+  background: var(--card);
 }
 
 .chart-box canvas {

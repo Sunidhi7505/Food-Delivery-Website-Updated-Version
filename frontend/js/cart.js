@@ -5,6 +5,8 @@ let paymentConfig = { enabled: false };
 let selectedAddressId = null;
 let temporaryAddress = null;
 let couponState = null;
+let pricingConfig = { taxPercent: 5, deliveryFee: 40, freeDeliveryAbove: 499 };
+let restaurantOpen = true;
 let deliveryMap = null;
 let deliveryMarkers = [];
 let deliveryRoute = null;
@@ -20,12 +22,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function loadCheckout() {
   try {
-    const [cart, profile, restaurant, config] = await Promise.all([
+    const [cart, profile, restaurant, config, pricing, status] = await Promise.all([
       apiFetch(API.GET_CART),
       apiFetch(API.PROFILE),
       apiFetch(API.RESTAURANT),
       apiFetch(API.PAYMENT_CONFIG),
+      apiFetch(API.PRICING_CONFIG),
+      apiFetch(API.RESTAURANT_STATUS),
     ]);
+
+    if (pricing) pricingConfig = pricing;
+    restaurantOpen = status?.open !== false;
+    const notice = document.getElementById("closedNotice");
+    if (notice) {
+      notice.style.display = restaurantOpen ? "none" : "block";
+      notice.textContent = `Restaurant is closed right now. Opening hours: ${status?.openingHours || ""}`;
+    }
+    const placeButton = document.getElementById("placeOrderBtn");
+    if (placeButton) placeButton.disabled = !restaurantOpen;
 
     cartState = cart;
     profileState = profile;
@@ -94,7 +108,13 @@ function renderTotals() {
   const discount = couponState?.valid ? couponState.discountAmount : 0;
   document.getElementById("subtotalAmount").textContent = money(subtotal);
   document.getElementById("discountAmount").textContent = `- ${money(discount)}`;
-  document.getElementById("totalAmount").textContent = money(payableTotal());
+  const price = priceBreakdown();
+  document.getElementById("taxLabel").textContent = `GST (${pricingConfig.taxPercent}%)`;
+  document.getElementById("taxAmount").textContent = money(price.tax);
+  document.getElementById("deliveryLabel").textContent =
+    price.deliveryFee === 0 && subtotal > 0 ? "Delivery fee (free)" : "Delivery fee";
+  document.getElementById("deliveryFeeAmount").textContent = money(price.deliveryFee);
+  document.getElementById("totalAmount").textContent = money(price.total);
 }
 
 function renderAddresses() {
@@ -336,8 +356,18 @@ function cartTotal() {
   return cartState?.items?.reduce((sum, item) => sum + item.price * item.quantity, 0) || 0;
 }
 
+// Mirrors PricingService on the backend (the server remains the authority when the order is placed).
+function priceBreakdown() {
+  const subtotal = cartTotal();
+  const discount = couponState?.valid ? couponState.discountAmount : 0;
+  const taxable = Math.max(subtotal - discount, 0);
+  const tax = Math.round(taxable * pricingConfig.taxPercent) / 100;
+  const deliveryFee = taxable <= 0 || taxable >= pricingConfig.freeDeliveryAbove ? 0 : pricingConfig.deliveryFee;
+  return { subtotal, discount, tax, deliveryFee, total: Math.round((taxable + tax + deliveryFee) * 100) / 100 };
+}
+
 function payableTotal() {
-  return Math.max(cartTotal() - (couponState?.valid ? couponState.discountAmount : 0), 0);
+  return priceBreakdown().total;
 }
 
 async function applyCoupon() {

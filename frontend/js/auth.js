@@ -6,6 +6,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("loginForm")?.addEventListener("submit", login);
   document.getElementById("registerForm")?.addEventListener("submit", register);
+  document.getElementById("forgotForm")?.addEventListener("submit", forgotPassword);
+  document.getElementById("resetForm")?.addEventListener("submit", resetPassword);
 });
 
 async function login(event) {
@@ -60,4 +62,39 @@ async function register(event) {
   setTimeout(() => {
     window.location.href = "login.html";
   }, 700);
+}
+
+async function forgotPassword(event) {
+  event.preventDefault();
+  const email = document.getElementById("email").value.trim();
+  if (!email) return;
+
+  const data = await apiFetch(API.FORGOT_PASSWORD, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+  showToast(data?.message || "Check your email for the reset link.");
+}
+
+async function resetPassword(event) {
+  event.preventDefault();
+  const token = new URLSearchParams(window.location.search).get("token");
+  const password = document.getElementById("password").value;
+  const confirmPassword = document.getElementById("confirmPassword").value;
+
+  if (!token) {
+    showToast("This reset link is invalid. Request a new one.", "error");
+    return;
+  }
+  if (password !== confirmPassword) {
+    showToast("Passwords do not match.", "error");
+    return;
+  }
+
+  await apiFetch(API.RESET_PASSWORD, {
+    method: "POST",
+    body: JSON.stringify({ token, newPassword: password }),
+  });
+  showToast("Password updated. Please login.");
+  setTimeout(() => (window.location.href = "login.html"), 900);
 }

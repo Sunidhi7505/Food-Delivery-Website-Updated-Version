@@ -1,6 +1,10 @@
 package com.foody.service;
 
+import com.foody.exception.ResourceNotFoundException;
+import com.foody.exception.ForbiddenException;
+import com.foody.dto.PageResponse;
 import com.foody.dto.PlaceOrderRequest;
+import com.foody.exception.BadRequestException;
 import com.foody.model.Address;
 import com.foody.model.Cart;
 import com.foody.model.CartItem;
@@ -35,6 +39,7 @@ public class OrderService {
     private final NotificationService notificationService;
     private final PaymentService paymentService;
     private final CouponService couponService;
+    private final PricingService pricingService;
 
     public OrderService(OrderRepository orderRepository,
                         CartRepository cartRepository,
@@ -43,7 +48,8 @@ public class OrderService {
                         RestaurantInfoService restaurantInfoService,
                         NotificationService notificationService,
                         PaymentService paymentService,
-                        CouponService couponService) {
+                        CouponService couponService,
+                        PricingService pricingService) {
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
         this.productRepository = productRepository;
@@ -52,6 +58,7 @@ public class OrderService {
         this.notificationService = notificationService;
         this.paymentService = paymentService;
         this.couponService = couponService;
+        this.pricingService = pricingService;
     }
 
     public synchronized Order placeOrder(String email, PlaceOrderRequest request) {
@@ -64,6 +71,11 @@ public class OrderService {
             throw new RuntimeException("Cart is empty");
         }
 
+        if (!restaurantInfoService.isOpenNow()) {
+            throw new BadRequestException("Restaurant is closed right now. Opening hours: "
+                    + restaurantInfoService.getRestaurant().getOpeningHours());
+        }
+
         User user = userService.getUserByEmail(email);
         Address deliveryAddress = resolveDeliveryAddress(email, orderRequest);
         String paymentMode = normalizePaymentMode(orderRequest.getPaymentMode());
@@ -73,7 +85,7 @@ public class OrderService {
 
         for (CartItem item : cart.getItems()) {
             Product product = productRepository.findById(item.getProductId())
-                    .orElseThrow(() -> new RuntimeException("Product not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
             if (!product.isAvailable() || product.getStock() <= 0) {
                 throw new RuntimeException(product.getName() + " is out of stock");
@@ -99,15 +111,6 @@ public class OrderService {
             if (!verified) {
                 throw new RuntimeException("Payment verification failed. Please try again.");
             }
-        }
-
-        for (int i = 0; i < productsToUpdate.size(); i++) {
-            Product product = productsToUpdate.get(i);
-            CartItem item = cart.getItems().get(i);
-
-            product.setStock(product.getStock() - item.getQuantity());
-            product.setAvailable(product.getStock() > 0);
-            productRepository.save(product);
         }
 
         List<CartItem> orderItems = new ArrayList<>();
@@ -136,7 +139,18 @@ public class OrderService {
             throw new RuntimeException(couponResult.getMessage());
         }
         double discountAmount = couponApplied ? couponResult.getDiscountAmount() : 0;
-        double totalAmount = Math.max(subtotalAmount - discountAmount, 0);
+        PricingService.Breakdown price = pricingService.calculate(subtotalAmount, discountAmount);
+        double totalAmount = price.total();
+
+        // Reduce stock only after every validation (payment, coupon) has passed.
+        for (int i = 0; i < productsToUpdate.size(); i++) {
+            Product product = productsToUpdate.get(i);
+            CartItem item = cart.getItems().get(i);
+
+            product.setStock(product.getStock() - item.getQuantity());
+            product.setAvailable(product.getStock() > 0);
+            productRepository.save(product);
+        }
 
         LocalDateTime now = LocalDateTime.now();
         RestaurantInfo restaurant = restaurantInfoService.getRestaurant();
@@ -148,6 +162,8 @@ public class OrderService {
         order.setItems(orderItems);
         order.setSubtotalAmount(subtotalAmount);
         order.setDiscountAmount(discountAmount);
+        order.setTaxAmount(price.tax());
+        order.setDeliveryFee(price.deliveryFee());
         order.setTotalAmount(totalAmount);
         order.setCouponCode(couponApplied ? couponResult.getCode() : "");
         order.setPaymentMode(paymentMode);
@@ -183,6 +199,70 @@ public class OrderService {
                 .toList();
     }
 
+    public PageResponse<Order> getAdminOrdersPage(int page, int size, String status, String keyword) {
+        String q = keyword == null ? "" : keyword.trim().toLowerCase();
+        List<Order> filtered = getAllOrders().stream()
+                .filter(o -> status == null || status.isBlank() || o.getStatus().name().equalsIgnoreCase(status))
+                .filter(o -> q.isEmpty()
+                        || (o.getId() != null && o.getId().toLowerCase().endsWith(q))
+                        || (o.getUserEmail() != null && o.getUserEmail().toLowerCase().contains(q))
+                        || (o.getCustomerName() != null && o.getCustomerName().toLowerCase().contains(q)))
+                .toList();
+        return PageResponse.of(filtered, page, size);
+    }
+
+    /** Copies the items of a past order into the cart, skipping dishes that are unavailable or short on stock. */
+    public Map<String, Object> reorder(String email, String orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new com.foody.exception.ResourceNotFoundException("Order not found"));
+        if (!order.getUserEmail().equals(email)) {
+            throw new com.foody.exception.ForbiddenException("You can reorder only your own orders");
+        }
+
+        Cart cart = cartRepository.findByUserEmail(email).orElseGet(() -> {
+            Cart c = new Cart();
+            c.setUserEmail(email);
+            c.setItems(new ArrayList<>());
+            return c;
+        });
+
+        List<String> added = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
+
+        for (CartItem past : order.getItems() == null ? List.<CartItem>of() : order.getItems()) {
+            Product product = productRepository.findById(past.getProductId()).orElse(null);
+            CartItem inCart = cart.getItems().stream()
+                    .filter(i -> i.getProductId().equals(past.getProductId()))
+                    .findFirst().orElse(null);
+            int existing = inCart == null ? 0 : inCart.getQuantity();
+
+            if (product == null || !product.isAvailable()) {
+                skipped.add(past.getName());
+                continue;
+            }
+            int quantity = Math.min(past.getQuantity(), product.getStock() - existing);
+            if (quantity <= 0) {
+                skipped.add(past.getName());
+                continue;
+            }
+
+            if (inCart == null) {
+                inCart = new CartItem();
+                inCart.setProductId(product.getId());
+                cart.getItems().add(inCart);
+            }
+            inCart.setName(product.getName());
+            inCart.setImageUrl(product.getImageUrl());
+            inCart.setCategory(product.getCategory());
+            inCart.setPrice(product.getPrice());
+            inCart.setQuantity(existing + quantity);
+            added.add(product.getName());
+        }
+
+        Cart saved = added.isEmpty() ? cart : cartRepository.save(cart);
+        return Map.of("cart", saved, "added", added, "skipped", skipped);
+    }
+
     public double getTotalRevenue() {
         return orderRepository.findAll()
                 .stream()
@@ -193,7 +273,7 @@ public class OrderService {
 
     public Order updateOrderStatus(String orderId, OrderStatus status) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
         if (status == OrderStatus.CANCELLED) {
             return cancelAdminOrder(orderId);
@@ -221,10 +301,10 @@ public class OrderService {
 
     public Order cancelCustomerOrder(String email, String orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
         if (!order.getUserEmail().equals(email)) {
-            throw new RuntimeException("You can cancel only your own orders");
+            throw new ForbiddenException("You can cancel only your own orders");
         }
 
         if (order.getStatus() == OrderStatus.CANCELLED) {
@@ -242,7 +322,7 @@ public class OrderService {
 
     public Order cancelAdminOrder(String orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
         if (order.getStatus() == OrderStatus.DELIVERED) {
             throw new RuntimeException("Delivered orders cannot be cancelled");
@@ -257,16 +337,16 @@ public class OrderService {
 
     public String invoiceForCustomer(String email, String orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         if (!order.getUserEmail().equals(email)) {
-            throw new RuntimeException("Invoice not found");
+            throw new ResourceNotFoundException("Invoice not found");
         }
         return invoiceText(order);
     }
 
     public String invoiceForAdmin(String orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         return invoiceText(order);
     }
 
@@ -368,6 +448,8 @@ public class OrderService {
         }
         builder.append("\nSubtotal: Rs ").append(Math.round(order.getSubtotalAmount() > 0 ? order.getSubtotalAmount() : order.getTotalAmount() + order.getDiscountAmount())).append("\n");
         builder.append("Discount: Rs ").append(Math.round(order.getDiscountAmount())).append("\n");
+        builder.append("GST: Rs ").append(String.format("%.2f", order.getTaxAmount())).append("\n");
+        builder.append("Delivery fee: Rs ").append(Math.round(order.getDeliveryFee())).append("\n");
         builder.append("Payable: Rs ").append(Math.round(order.getTotalAmount())).append("\n");
         builder.append("Payment: ").append(order.getPaymentMode()).append(" / ").append(order.getPaymentStatus()).append("\n");
         return builder.toString();

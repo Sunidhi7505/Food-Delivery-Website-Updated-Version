@@ -1,5 +1,6 @@
 package com.foody.service;
 
+import com.foody.exception.ConflictException;
 import com.foody.model.Order;
 import com.foody.model.OrderStatus;
 import com.foody.model.Review;
@@ -32,7 +33,7 @@ public class ReviewService {
 
         reviewRepository.findByProductIdAndUserEmail(productId, email)
                 .ifPresent(r -> {
-                    throw new RuntimeException("You already reviewed this product");
+                    throw new ConflictException("You already reviewed this product");
                 });
 
 

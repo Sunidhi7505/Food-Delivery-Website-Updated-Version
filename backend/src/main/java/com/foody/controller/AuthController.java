@@ -1,7 +1,10 @@
 package com.foody.controller;
 
+import com.foody.dto.ForgotPasswordRequest;
 import com.foody.dto.LoginRequest;
 import com.foody.dto.RegisterRequest;
+import com.foody.dto.ResetPasswordRequest;
+import com.foody.service.PasswordResetService;
 import com.foody.service.AuthService;
 import com.foody.service.UserService;
 import jakarta.validation.Valid;
@@ -16,10 +19,24 @@ public class AuthController {
 
     private final UserService userService;
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
 
-    public AuthController(UserService userService, AuthService authService) {
+    public AuthController(UserService userService, AuthService authService,
+                          PasswordResetService passwordResetService) {
         this.userService = userService;
         this.authService = authService;
+        this.passwordResetService = passwordResetService;
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return ResponseEntity.ok(Map.of("message", passwordResetService.requestReset(request.getEmail())));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return ResponseEntity.ok(Map.of("message",
+                passwordResetService.resetPassword(request.getToken(), request.getNewPassword())));
     }
 
     @PostMapping("/register")

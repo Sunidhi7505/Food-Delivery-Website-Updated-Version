@@ -37,7 +37,7 @@
           <div class="metric-strip">
             <div class="metric"><strong>Live</strong><span>Stock checks</span></div>
             <div class="metric"><strong>Map</strong><span>Delivery pin</span></div>
-            <div class="metric"><strong>Smart</strong><span>Food assistant</span></div>
+            <div class="metric"><strong>Offers</strong><span>Coupons at checkout</span></div>
           </div>
         </div>
         <div class="hero-visual">
@@ -47,7 +47,7 @@
               <strong>Freshly prepared</strong>
               <span>Order tracking from kitchen to delivery</span>
             </div>
-            <span class="pill pill-success">Open</span>
+            <span class="pill" id="restaurantStatus">Checking...</span>
           </div>
         </div>
       </section>
@@ -108,6 +108,9 @@
         </div>
 
         <div id="productGrid" class="product-grid"></div>
+        <div class="load-more"><button class="btn btn-outline" id="loadMoreBtn" type="button" style="display:none;">
+          <i data-lucide="chevrons-down"></i>Load more
+        </button></div>
         <div id="emptyState" class="empty" style="display:none;">
           <div>
             <i data-lucide="search-x"></i>
@@ -118,7 +121,6 @@
       </section>
     </main>
 
-    <div id="chatbotRoot"></div>
     <footer class="footer">Foody 2026. Built with HTML, CSS, JS, Spring Boot, MongoDB and JWT.</footer>
   </div>
 </body>

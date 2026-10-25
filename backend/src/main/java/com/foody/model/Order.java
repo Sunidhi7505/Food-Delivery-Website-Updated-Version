@@ -20,6 +20,8 @@ public class Order {
     private List<CartItem> items;
     private double subtotalAmount;
     private double discountAmount;
+    private double taxAmount;
+    private double deliveryFee;
     private double totalAmount;
     private String couponCode;
 
@@ -202,5 +204,21 @@ public class Order {
 
     public void setStatusTimeline(Map<String, LocalDateTime> statusTimeline) {
         this.statusTimeline = statusTimeline == null ? new LinkedHashMap<>() : statusTimeline;
+    }
+
+    public double getTaxAmount() {
+        return taxAmount;
+    }
+
+    public void setTaxAmount(double taxAmount) {
+        this.taxAmount = taxAmount;
+    }
+
+    public double getDeliveryFee() {
+        return deliveryFee;
+    }
+
+    public void setDeliveryFee(double deliveryFee) {
+        this.deliveryFee = deliveryFee;
     }
 }

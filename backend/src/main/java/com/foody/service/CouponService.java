@@ -1,5 +1,7 @@
 package com.foody.service;
 
+import com.foody.exception.ResourceNotFoundException;
+import com.foody.exception.ConflictException;
 import com.foody.dto.CouponRequest;
 import com.foody.dto.CouponValidationResponse;
 import com.foody.model.Coupon;
@@ -22,18 +24,18 @@ public class CouponService {
     public Coupon create(CouponRequest request) {
         couponRepository.findByCodeIgnoreCase(request.getCode())
                 .ifPresent(coupon -> {
-                    throw new RuntimeException("Coupon code already exists");
+                    throw new ConflictException("Coupon code already exists");
                 });
         return couponRepository.save(toCoupon(new Coupon(), request));
     }
 
     public Coupon update(String id, CouponRequest request) {
         Coupon coupon = couponRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Coupon not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Coupon not found"));
         couponRepository.findByCodeIgnoreCase(request.getCode())
                 .filter(existing -> !existing.getId().equals(id))
                 .ifPresent(existing -> {
-                    throw new RuntimeException("Coupon code already exists");
+                    throw new ConflictException("Coupon code already exists");
                 });
         return couponRepository.save(toCoupon(coupon, request));
     }

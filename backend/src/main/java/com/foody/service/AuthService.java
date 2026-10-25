@@ -1,5 +1,7 @@
 package com.foody.service;
 
+import com.foody.exception.ForbiddenException;
+import com.foody.exception.UnauthorizedException;
 import com.foody.dto.LoginRequest;
 import com.foody.model.User;
 import com.foody.repository.UserRepository;
@@ -26,14 +28,14 @@ public class AuthService {
     public Map<String, Object> login(LoginRequest request) {
 
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UnauthorizedException("Invalid credentials"));
 
         if (user.isBlocked()) {
-            throw new RuntimeException("Your account is blocked. Please contact admin.");
+            throw new ForbiddenException("Your account is blocked. Please contact admin.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid credentials");
+            throw new UnauthorizedException("Invalid credentials");
         }
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getRole());

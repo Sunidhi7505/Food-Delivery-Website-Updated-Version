@@ -1,5 +1,7 @@
 package com.foody.service;
 
+import com.foody.exception.ResourceNotFoundException;
+import com.foody.exception.ConflictException;
 import com.foody.dto.AddressRequest;
 import com.foody.dto.AdminUserResponse;
 import com.foody.dto.ProfileUpdateRequest;
@@ -36,7 +38,7 @@ public class UserService {
     public String registerUser(RegisterRequest request) {
 
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new RuntimeException("Email already registered");
+            throw new ConflictException("Email already registered");
         }
 
         User user = new User();
@@ -135,7 +137,7 @@ public class UserService {
 
     public User getUserByEmail(String email) {
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
     public Address findDeliveryAddress(String email, String addressId) {
@@ -194,7 +196,7 @@ public class UserService {
 
     public AdminUserResponse setBlocked(String userId, boolean blocked) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if ("ROLE_ADMIN".equals(user.getRole())) {
             throw new RuntimeException("Admin users cannot be blocked from the dashboard");
@@ -228,7 +230,7 @@ public class UserService {
         return addresses.stream()
                 .filter(address -> address.getId().equals(addressId))
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("Address not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Address not found"));
     }
 
     private Address toAddress(AddressRequest request) {

@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadWishlist();
   loadCategories();
   loadFeatured();
+  loadRestaurantStatus();
   loadProducts();
 });
 
@@ -78,7 +79,10 @@ function scrollFeatured(direction) {
   });
 }
 
-async function applyFilters() {
+const PAGE_SIZE = 12;
+let currentPage = 0;
+
+function filterParams() {
   const params = new URLSearchParams();
   const keyword = document.getElementById("searchKeyword").value.trim();
   const min = document.getElementById("minPrice").value;
@@ -96,34 +100,63 @@ async function applyFilters() {
   if (direction) params.append("direction", direction);
   if (selectedCategory) params.append("category", selectedCategory);
   if (vegetarian) params.append("vegetarian", "true");
-
-  await loadProducts(params.toString() ? `${API.PRODUCT_SEARCH}?${params}` : API.PRODUCTS);
+  return params;
 }
 
-async function loadProducts(url = API.PRODUCTS) {
+async function applyFilters() {
+  await loadProducts(true);
+}
+
+// Server-side pagination: first page replaces the grid, "Load more" appends the next one.
+async function loadProducts(reset = true) {
   const grid = document.getElementById("productGrid");
   const emptyState = document.getElementById("emptyState");
+  const moreButton = document.getElementById("loadMoreBtn");
   if (!grid) return;
 
-  grid.innerHTML = Array.from({ length: 6 })
-    .map(() => `<div class="product-card skeleton"></div>`)
-    .join("");
+  if (reset) {
+    currentPage = 0;
+    grid.innerHTML = Array.from({ length: 6 })
+      .map(() => `<div class="product-card skeleton"></div>`)
+      .join("");
+  }
 
   try {
-    const products = await apiFetch(url);
-    grid.innerHTML = "";
+    const params = filterParams();
+    params.append("page", currentPage);
+    params.append("size", PAGE_SIZE);
+    const data = await apiFetch(`${API.PRODUCT_PAGE}?${params}`);
+    if (reset) grid.innerHTML = "";
 
-    if (!products || products.length === 0) {
-      emptyState.style.display = "grid";
-      return;
-    }
-
-    emptyState.style.display = "none";
+    const products = data?.items || [];
+    emptyState.style.display = reset && products.length === 0 ? "grid" : "none";
     products.forEach((product) => grid.appendChild(renderProductCard(product)));
+
+    if (moreButton) {
+      moreButton.style.display = data?.hasMore ? "inline-flex" : "none";
+      moreButton.onclick = async () => {
+        currentPage += 1;
+        moreButton.disabled = true;
+        await loadProducts(false);
+        moreButton.disabled = false;
+      };
+    }
     refreshIcons();
   } catch (error) {
-    grid.innerHTML = "";
-    emptyState.style.display = "grid";
+    if (reset) grid.innerHTML = "";
+    emptyState.style.display = reset ? "grid" : "none";
+  }
+}
+
+async function loadRestaurantStatus() {
+  const pill = document.getElementById("restaurantStatus");
+  if (!pill) return;
+  try {
+    const status = await apiFetch(API.RESTAURANT_STATUS);
+    pill.className = status.open ? "status-pill-open" : "status-pill-closed";
+    pill.textContent = status.open ? "Open now" : `Closed - opens ${status.openingHours.split("-")[0].trim()}`;
+  } catch (error) {
+    pill.style.display = "none";
   }
 }
 

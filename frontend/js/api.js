@@ -1,4 +1,7 @@
-const BASE_URL = "https://food-backend-vzp9.onrender.com";
+// Local development talks to the local backend; any other host uses the deployed one.
+const BASE_URL = ["localhost", "127.0.0.1", ""].includes(window.location.hostname)
+  ? "http://localhost:8080"
+  : "https://food-backend-vzp9.onrender.com";
 
 const API = {
   REGISTER: `${BASE_URL}/api/auth/register`,
@@ -46,7 +49,14 @@ const API = {
   PAYMENT_CONFIG: `${BASE_URL}/api/payments/config`,
   CREATE_PAYMENT_ORDER: `${BASE_URL}/api/payments/create-order`,
   RESTAURANT: `${BASE_URL}/api/restaurant`,
-  CHATBOT: `${BASE_URL}/api/chatbot/message`,
+  FORGOT_PASSWORD: `${BASE_URL}/api/auth/forgot-password`,
+  RESET_PASSWORD: `${BASE_URL}/api/auth/reset-password`,
+  PRODUCT_PAGE: `${BASE_URL}/api/products/page`,
+  REORDER: (id) => `${BASE_URL}/api/orders/${id}/reorder`,
+  ADMIN_ORDERS_PAGE: `${BASE_URL}/api/orders/admin/page`,
+  ADMIN_EXPORT: (type) => `${BASE_URL}/api/admin/export/${type}.csv`,
+  RESTAURANT_STATUS: `${BASE_URL}/api/restaurant/status`,
+  PRICING_CONFIG: `${BASE_URL}/api/pricing/config`,
 };
 
 const FALLBACK_IMAGE =
@@ -96,9 +106,9 @@ async function apiFetch(url, options = {}) {
     headers,
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && token) {
     showToast("Your session expired. Please login again.", "error");
-    if (isLoggedIn()) logout();
+    logout();
     return null;
   }
 
@@ -114,12 +124,61 @@ async function apiFetch(url, options = {}) {
   }
 
   if (!response.ok) {
-    const message = typeof data === "object" && data?.message ? data.message : "Request failed";
+    const firstFieldError = data?.fieldErrors ? Object.values(data.fieldErrors)[0] : null;
+    const message = firstFieldError || (typeof data === "object" && data?.message ? data.message : "Request failed");
     showToast(message, "error");
     throw new Error(message);
   }
 
   return data;
+}
+
+// ---------- Theme (light / dark) ----------
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  try {
+    localStorage.setItem("theme", theme);
+  } catch (error) {
+    /* storage unavailable */
+  }
+}
+
+(function initTheme() {
+  let saved = null;
+  try {
+    saved = localStorage.getItem("theme");
+  } catch (error) {
+    /* storage unavailable */
+  }
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = saved || (prefersDark ? "dark" : "light");
+})();
+
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+  refreshThemeIcon();
+}
+
+function refreshThemeIcon() {
+  const icon = document.querySelector("#themeToggle i");
+  if (!icon) return;
+  icon.setAttribute("data-lucide", document.documentElement.dataset.theme === "dark" ? "sun" : "moon");
+  refreshIcons();
+}
+
+// Authenticated file download (a plain link cannot send the JWT header).
+async function downloadFile(url, filename) {
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } });
+  if (!response.ok) {
+    showToast("Download failed.", "error");
+    return;
+  }
+  const blob = await response.blob();
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 function renderNav(activePage = document.body.dataset.page || "home") {
@@ -159,8 +218,11 @@ function renderNav(activePage = document.body.dataset.page || "home") {
     html += `<li><button class="nav-button" type="button" onclick="logout()"><i data-lucide="log-out"></i><span>Logout</span></button></li>`;
   }
 
+  html += `<li><button class="nav-button" id="themeToggle" type="button" onclick="toggleTheme()" aria-label="Toggle dark mode"><i data-lucide="moon"></i></button></li>`;
+
   nav.innerHTML = html;
   refreshIcons();
+  refreshThemeIcon();
   updateCartCount();
 }
 
@@ -260,90 +322,6 @@ function refreshIcons() {
   }
 }
 
-function mountChatbot() {
-  const root = document.getElementById("chatbotRoot");
-  if (!root) return;
-
-  root.innerHTML = `
-    <button class="chat-toggle" id="chatToggle" type="button" aria-label="Open chat">
-      <i data-lucide="bot"></i>
-    </button>
-    <section class="chat-panel" id="chatPanel" aria-label="Food assistant">
-      <div class="chat-head">
-        <div>
-          <strong>Foody Assistant</strong>
-          <span>Online</span>
-        </div>
-        <button class="icon-button" id="chatClose" type="button" aria-label="Close chat">
-          <i data-lucide="x"></i>
-        </button>
-      </div>
-      <div class="chat-messages" id="chatMessages">
-        <div class="chat-message bot">Ask me about delivery, payments, addresses, reviews, or recommendations.</div>
-      </div>
-      <form class="chat-form" id="chatForm">
-        <input id="chatInput" placeholder="Type your question" autocomplete="off" />
-        <button class="icon-button filled" type="submit" aria-label="Send">
-          <i data-lucide="send"></i>
-        </button>
-      </form>
-    </section>
-  `;
-
-  const panel = document.getElementById("chatPanel");
-  const toggle = document.getElementById("chatToggle");
-  const close = document.getElementById("chatClose");
-  const form = document.getElementById("chatForm");
-  const input = document.getElementById("chatInput");
-  const messages = document.getElementById("chatMessages");
-
-  toggle.addEventListener("click", () => panel.classList.toggle("open"));
-  close.addEventListener("click", () => panel.classList.remove("open"));
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const message = input.value.trim();
-    if (!message) return;
-    appendChat(messages, message, "user");
-    input.value = "";
-
-    try {
-      const data = await apiFetch(API.CHATBOT, {
-        method: "POST",
-        body: JSON.stringify({ message }),
-      });
-
-      let reply = data?.reply || "I could not understand that.";
-      const recommendations = data?.recommendations || [];
-      if (recommendations.length) {
-        reply += `<div class="chat-recos">${recommendations
-          .map(
-            (product) =>
-              `<button type="button" onclick="location.href='product.html?id=${product.id}'">${escapeHtml(product.name)}</button>`
-          )
-          .join("")}</div>`;
-      }
-      appendChat(messages, reply, "bot", true);
-    } catch (error) {
-      appendChat(messages, "I am having trouble connecting right now.", "bot");
-    }
-  });
-
-  refreshIcons();
-}
-
-function appendChat(container, message, type, isHtml = false) {
-  const div = document.createElement("div");
-  div.className = `chat-message ${type}`;
-  if (isHtml) {
-    div.innerHTML = message;
-  } else {
-    div.textContent = message;
-  }
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-}
-
 document.addEventListener("DOMContentLoaded", () => {
   renderNav();
-  mountChatbot();
 });

@@ -1,5 +1,6 @@
 package com.foody.service;
 
+import com.foody.exception.ResourceNotFoundException;
 import com.foody.model.Cart;
 import com.foody.model.CartItem;
 import com.foody.model.Product;
@@ -29,7 +30,7 @@ public class CartService {
         }
 
         Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         if (!product.isAvailable() || product.getStock() <= 0) {
             throw new RuntimeException(product.getName() + " is out of stock");
@@ -89,7 +90,7 @@ public class CartService {
     public Cart removeItem(String email, String productId) {
 
         Cart cart = cartRepository.findByUserEmail(email)
-                .orElseThrow(() -> new RuntimeException("Cart not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
 
         Iterator<CartItem> iterator = cart.getItems().iterator();
         boolean removed = false;
@@ -104,7 +105,7 @@ public class CartService {
         }
 
         if (!removed) {
-            throw new RuntimeException("Item not found in cart");
+            throw new ResourceNotFoundException("Item not found in cart");
         }
 
         if (cart.getItems().isEmpty()) {
@@ -121,10 +122,10 @@ public class CartService {
         }
 
         Cart cart = cartRepository.findByUserEmail(email)
-                .orElseThrow(() -> new RuntimeException("Cart not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
 
         Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         if (!product.isAvailable() || product.getStock() <= 0) {
             throw new RuntimeException(product.getName() + " is out of stock");
@@ -139,7 +140,7 @@ public class CartService {
         CartItem item = cart.getItems().stream()
                 .filter(i -> i.getProductId().equals(productId))
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("Item not found in cart"));
+                .orElseThrow(() -> new ResourceNotFoundException("Item not found in cart"));
 
         item.setQuantity(quantity);
         item.setName(product.getName());

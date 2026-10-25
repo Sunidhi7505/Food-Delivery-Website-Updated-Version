@@ -1,3 +1,4 @@
+let allOrders = [];
 let ordersState = [];
 let ordersMap = null;
 let ordersMarkers = [];
@@ -7,36 +8,79 @@ let riderInterval = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   if (!requireCustomer()) return;
+  ["orderSearch", "orderStatusFilter", "orderPeriodFilter"].forEach((id) => {
+    document.getElementById(id)?.addEventListener(id === "orderSearch" ? "input" : "change", renderOrders);
+  });
   loadOrders();
   setInterval(loadOrders, 20000);
 });
 
 async function loadOrders() {
-  const ordersList = document.getElementById("ordersList");
-  const emptyOrders = document.getElementById("emptyOrders");
-
   try {
-    ordersState = await apiFetch(API.GET_ORDERS);
-    ordersList.innerHTML = "";
-
-    if (!ordersState || ordersState.length === 0) {
-      emptyOrders.style.display = "grid";
-      document.getElementById("ordersMapPanel").style.display = "none";
-      return;
-    }
-
-    emptyOrders.style.display = "none";
-    document.getElementById("ordersMapPanel").style.display = "block";
-
-    ordersState.forEach((order, index) => {
-      ordersList.appendChild(renderOrder(order, index));
-    });
-
-    const activeIndex = Math.max(ordersState.findIndex((order) => order.status !== "DELIVERED"), 0);
-    showOrderMap(activeIndex);
-    refreshIcons();
+    allOrders = (await apiFetch(API.GET_ORDERS)) || [];
+    renderOrders();
   } catch (error) {
     console.error(error);
+  }
+}
+
+function filteredOrders() {
+  const query = document.getElementById("orderSearch")?.value.trim().toLowerCase() || "";
+  const status = document.getElementById("orderStatusFilter")?.value || "";
+  const days = Number(document.getElementById("orderPeriodFilter")?.value || 0);
+  const since = days ? Date.now() - days * 24 * 60 * 60 * 1000 : 0;
+
+  return allOrders.filter((order) => {
+    if (status === "ACTIVE" && ["DELIVERED", "CANCELLED"].includes(order.status)) return false;
+    if (status && status !== "ACTIVE" && order.status !== status) return false;
+    if (since && new Date(order.orderTime).getTime() < since) return false;
+    if (!query) return true;
+    return (
+      (order.id || "").toLowerCase().endsWith(query) ||
+      (order.items || []).some((item) => (item.name || "").toLowerCase().includes(query))
+    );
+  });
+}
+
+function renderOrders() {
+  const ordersList = document.getElementById("ordersList");
+  const emptyOrders = document.getElementById("emptyOrders");
+  ordersList.innerHTML = "";
+
+  if (allOrders.length === 0) {
+    emptyOrders.style.display = "grid";
+    document.getElementById("ordersMapPanel").style.display = "none";
+    document.getElementById("orderFilters").style.display = "none";
+    return;
+  }
+
+  emptyOrders.style.display = "none";
+  document.getElementById("orderFilters").style.display = "flex";
+  ordersState = filteredOrders();
+
+  if (ordersState.length === 0) {
+    ordersList.innerHTML = `<div class="empty"><div><h3>No orders match these filters</h3></div></div>`;
+    document.getElementById("ordersMapPanel").style.display = "none";
+    return;
+  }
+
+  document.getElementById("ordersMapPanel").style.display = "block";
+  ordersState.forEach((order, index) => ordersList.appendChild(renderOrder(order, index)));
+
+  const activeIndex = Math.max(ordersState.findIndex((order) => order.status !== "DELIVERED"), 0);
+  showOrderMap(activeIndex);
+  refreshIcons();
+}
+
+async function reorderOrder(orderId) {
+  const result = await apiFetch(API.REORDER(orderId), { method: "POST" });
+  if (!result) return;
+  if (result.skipped?.length) {
+    showToast(`Not available now: ${result.skipped.join(", ")}`, "error");
+  }
+  if (result.added?.length) {
+    showToast(`Added to cart: ${result.added.join(", ")}`);
+    setTimeout(() => (window.location.href = "cart.html"), 900);
   }
 }
 
@@ -66,10 +110,16 @@ function renderOrder(order, index) {
           </div>`
         )
         .join("")}
+      ${order.discountAmount ? `<div class="card-row muted"><span>Discount</span><span>- ${money(order.discountAmount)}</span></div>` : ""}
+      ${order.taxAmount ? `<div class="card-row muted"><span>GST</span><span>${money(order.taxAmount)}</span></div>` : ""}
+      ${order.deliveryFee ? `<div class="card-row muted"><span>Delivery fee</span><span>${money(order.deliveryFee)}</span></div>` : ""}
     </div>
     <div class="hero-actions">
       <button class="btn btn-outline" type="button" onclick="showOrderMap(${index})">
         <i data-lucide="map"></i>Show route
+      </button>
+      <button class="btn btn-outline" type="button" onclick="reorderOrder('${order.id}')">
+        <i data-lucide="repeat"></i>Reorder
       </button>
       <button class="btn btn-outline" type="button" onclick="printInvoice('${order.id}')">
         <i data-lucide="receipt-text"></i>Invoice

@@ -131,7 +131,7 @@
             <input id="stock" class="input" type="number" min="0" placeholder="Stock" required />
             <input id="prepTime" class="input" type="number" min="5" value="25" placeholder="Prep minutes" />
             <label class="chip"><input id="vegetarian" type="checkbox" /> Vegetarian</label>
-            <textarea id="description" class="full" placeholder="Description"></textarea>
+            <textarea id="description" class="full" placeholder="Description" maxlength="500"></textarea>
             <div class="admin-actions full">
               <button class="btn btn-primary" type="submit"><i data-lucide="save"></i>Save Product</button>
               <button class="btn btn-outline" id="resetProductBtn" type="button">Clear</button>
@@ -162,6 +162,23 @@
               <p class="eyebrow">Fulfilment</p>
               <h2>Orders</h2>
             </div>
+            <div class="admin-actions">
+              <button class="btn btn-outline" type="button" data-export="orders"><i data-lucide="download"></i>Orders CSV</button>
+              <button class="btn btn-outline" type="button" data-export="products"><i data-lucide="download"></i>Products CSV</button>
+              <button class="btn btn-outline" type="button" data-export="users"><i data-lucide="download"></i>Users CSV</button>
+            </div>
+          </div>
+          <div class="filter-bar">
+            <input id="adminOrderSearch" class="input" placeholder="Search customer, email or order id" />
+            <select id="adminOrderStatus" class="select">
+              <option value="">All statuses</option>
+              <option value="PLACED">Placed</option>
+              <option value="CONFIRMED">Confirmed</option>
+              <option value="PREPARING">Preparing</option>
+              <option value="OUT_FOR_DELIVERY">Rider on the way</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
           </div>
           <div class="table-wrap">
             <table>
@@ -171,6 +188,9 @@
               <tbody id="orderTable"></tbody>
             </table>
           </div>
+          <div class="load-more"><button class="btn btn-outline" id="adminOrdersMore" type="button" style="display:none;">
+            <i data-lucide="chevrons-down"></i>Load more orders
+          </button></div>
         </section>
 
         <section class="admin-section">

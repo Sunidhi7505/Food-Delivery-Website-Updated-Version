@@ -3,6 +3,7 @@ package com.foody.controller;
 import com.foody.model.RestaurantInfo;
 import com.foody.service.RestaurantInfoService;
 import org.springframework.web.bind.annotation.GetMapping;
+import java.util.Map;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +22,11 @@ public class RestaurantController {
     @GetMapping
     public RestaurantInfo restaurant() {
         return restaurantInfoService.getRestaurant();
+    }
+
+    @GetMapping("/status")
+    public Map<String, Object> status() {
+        return restaurantInfoService.getStatus();
     }
 
     @PutMapping

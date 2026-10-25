@@ -5,6 +5,24 @@
 
 #### Credentials for Admin Login - Email : admin@gmail.com, Password : admin123
 
+#### Run locally with the test DB -
+```
+cd backend && ./run-with-test-db.sh        # API on :8080, in-memory MongoDB "foodify_test" (admin auto-seeded)
+cd frontend && python3 -m http.server 5500  # open http://localhost:5500
+./mvnw test                                 # JUnit 5 + Mockito unit tests + context test
+```
+Admin: admin@gmail.com / admin123.
+
+#### Architecture and design docs -
+```mermaid
+flowchart LR
+    Browser["Browser<br/>HTML / CSS / JS"] -->|REST + JWT| API["Spring Boot API<br/>controllers, services, security"]
+    API --> DB[(MongoDB)]
+    API --> Razorpay[[Razorpay]]
+    API --> Mail[[SMTP mail]]
+```
+Full UML, use case, DFD, ER, sequence diagrams and a 5-minute demo script: [docs/DESIGN.md](docs/DESIGN.md)
+
 #### Register Form -
 <img width="545" height="868" alt="image" src="https://github.com/user-attachments/assets/a2f4a541-5d24-433f-920f-833e3ff6eb4d" />
 
@@ -38,9 +56,6 @@
 
 #### Product Listing with Search, Filter, Sort, Add to Cart, Add to Wishlist, Open PDP Features -
 <img width="1919" height="1007" alt="image" src="https://github.com/user-attachments/assets/0671d2af-7f60-4eba-9357-4ff26a1374ad" />
-
-#### Dummy Chatbot -
-<img width="490" height="717" alt="image" src="https://github.com/user-attachments/assets/f59bf698-75f2-4789-a23d-bc740b42f0cf" />
 
 #### Product Description Page and Add Reviews - Rating Feature for Verified User -
 <img width="995" height="998" alt="image" src="https://github.com/user-attachments/assets/701eb765-44a4-43d7-b2e0-81fd2a5aba45" />

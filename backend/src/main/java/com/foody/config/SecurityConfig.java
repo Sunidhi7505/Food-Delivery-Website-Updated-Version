@@ -1,6 +1,7 @@
 package com.foody.config;
 
 import com.foody.security.JwtAuthFilter;
+import com.foody.security.RestErrorHandlers;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -12,9 +13,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RestErrorHandlers errorHandlers;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, RestErrorHandlers errorHandlers) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.errorHandlers = errorHandlers;
     }
 
     @Bean
@@ -23,6 +26,9 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .cors(cors -> {})
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint(errorHandlers)
+                .accessDeniedHandler(errorHandlers))
 
             .authorizeHttpRequests(auth -> auth
 
@@ -43,8 +49,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/reviews/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/restaurant").permitAll()
-                .requestMatchers("/api/chatbot/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/restaurant", "/api/restaurant/status").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/pricing/config").permitAll()
 
                 // Customer APIs
                 .requestMatchers("/api/cart/**").hasAuthority("ROLE_CUSTOMER")
@@ -54,6 +60,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/orders/place").hasAuthority("ROLE_CUSTOMER")
                 .requestMatchers(HttpMethod.GET, "/api/orders").hasAuthority("ROLE_CUSTOMER")
                 .requestMatchers(HttpMethod.PUT, "/api/orders/*/cancel").hasAuthority("ROLE_CUSTOMER")
+                .requestMatchers(HttpMethod.POST, "/api/orders/*/reorder").hasAuthority("ROLE_CUSTOMER")
                 .requestMatchers(HttpMethod.GET, "/api/orders/*/invoice").hasAuthority("ROLE_CUSTOMER")
                 .requestMatchers(HttpMethod.POST, "/api/reviews/**").hasAuthority("ROLE_CUSTOMER")
 

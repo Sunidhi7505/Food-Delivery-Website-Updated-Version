@@ -1,5 +1,6 @@
 package com.foody.service;
 
+import com.foody.exception.ResourceNotFoundException;
 import com.foody.model.Product;
 import com.foody.repository.ProductRepository;
 import com.foody.repository.ReviewRepository;
@@ -51,7 +52,7 @@ public class ProductService {
     public Product update(String id, Product updated) {
 
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         if (updated.getName() == null || updated.getName().isBlank()) {
             throw new RuntimeException("Product name is required");
@@ -90,7 +91,7 @@ public class ProductService {
 
     public Product getById(String id) {
         return attachRatingSummary(productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found")));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found")));
     }
 
 
@@ -101,7 +102,7 @@ public class ProductService {
         }
 
         Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         if (!product.isAvailable() || product.getStock() <= 0) {
             throw new RuntimeException(product.getName() + " is out of stock");

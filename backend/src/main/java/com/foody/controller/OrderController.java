@@ -1,6 +1,7 @@
 package com.foody.controller;
 
 import com.foody.dto.OrderStatusRequest;
+import com.foody.dto.PageResponse;
 import com.foody.dto.PlaceOrderRequest;
 import com.foody.model.Order;
 import com.foody.model.OrderStatus;
@@ -34,6 +35,11 @@ public class OrderController {
         return orderService.getUserOrders(auth.getName());
     }
 
+    @PostMapping("/{orderId}/reorder")
+    public Map<String, Object> reorder(@PathVariable String orderId, Authentication auth) {
+        return orderService.reorder(auth.getName(), orderId);
+    }
+
     @PutMapping("/{orderId}/cancel")
     public Order cancelMine(@PathVariable String orderId,
                             Authentication auth) {
@@ -49,6 +55,14 @@ public class OrderController {
     @GetMapping("/admin/all")
     public List<Order> allOrders() {
         return orderService.getAllOrders();
+    }
+
+    @GetMapping("/admin/page")
+    public PageResponse<Order> adminOrdersPage(@RequestParam(defaultValue = "0") int page,
+                                               @RequestParam(defaultValue = "10") int size,
+                                               @RequestParam(required = false) String status,
+                                               @RequestParam(required = false) String q) {
+        return orderService.getAdminOrdersPage(page, size, status, q);
     }
 
     @GetMapping("/admin/revenue")

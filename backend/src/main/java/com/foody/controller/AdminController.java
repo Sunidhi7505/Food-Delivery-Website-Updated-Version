@@ -2,9 +2,13 @@ package com.foody.controller;
 
 import com.foody.dto.AdminUserResponse;
 import com.foody.model.Product;
+import com.foody.service.CsvExportService;
 import com.foody.service.OrderService;
 import com.foody.service.ProductService;
 import com.foody.service.UserService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,13 +27,16 @@ public class AdminController {
     private final OrderService orderService;
     private final ProductService productService;
     private final UserService userService;
+    private final CsvExportService csvExportService;
 
     public AdminController(OrderService orderService,
                            ProductService productService,
-                           UserService userService) {
+                           UserService userService,
+                           CsvExportService csvExportService) {
         this.orderService = orderService;
         this.productService = productService;
         this.userService = userService;
+        this.csvExportService = csvExportService;
     }
 
     @GetMapping("/dashboard")
@@ -42,6 +49,20 @@ public class AdminController {
                 "totalProducts", productService.getAll().size(),
                 "analytics", analytics
         );
+    }
+
+    @GetMapping("/export/{type}.csv")
+    public ResponseEntity<byte[]> exportCsv(@PathVariable String type) {
+        String csv = switch (type) {
+            case "orders" -> csvExportService.orders();
+            case "products" -> csvExportService.products();
+            case "users" -> csvExportService.users();
+            default -> throw new com.foody.exception.ResourceNotFoundException("Unknown export: " + type);
+        };
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"foody-" + type + ".csv\"")
+                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .body(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     @PostMapping("/seed-products")

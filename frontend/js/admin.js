@@ -1,5 +1,6 @@
 let adminProducts = [];
 let adminOrders = [];
+let adminOrdersPage = 0;
 let adminCoupons = [];
 let adminUsers = [];
 let restaurantState = null;
@@ -20,6 +21,19 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("resetCouponBtn")?.addEventListener("click", resetCouponForm);
   document.getElementById("restaurantForm")?.addEventListener("submit", saveRestaurant);
   document.getElementById("restaurantLocationBtn")?.addEventListener("click", useRestaurantLocation);
+
+  document.querySelectorAll("[data-export]").forEach((button) =>
+    button.addEventListener("click", () =>
+      downloadFile(API.ADMIN_EXPORT(button.dataset.export), `foody-${button.dataset.export}.csv`)
+    )
+  );
+  document.getElementById("adminOrderStatus")?.addEventListener("change", () => loadAdminOrders());
+  let searchTimer;
+  document.getElementById("adminOrderSearch")?.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadAdminOrders(), 300);
+  });
+  document.getElementById("adminOrdersMore")?.addEventListener("click", () => loadAdminOrders(false));
 
   initRestaurantMap();
   loadAdminData();
@@ -207,38 +221,53 @@ function resetForm() {
   document.getElementById("prepTime").value = 25;
 }
 
-async function loadAdminOrders() {
-  const body = document.getElementById("orderTable");
-  adminOrders = (await apiFetch(API.ADMIN_ORDERS)) || [];
+function adminOrderRow(order) {
+  return `
+    <tr>
+      <td><strong>${escapeHtml(order.id?.slice(-8) || "")}</strong><br/><small>${formatDateTime(order.orderTime)}</small></td>
+      <td>${escapeHtml(order.customerName || order.userEmail)}<br/><small class="muted">${escapeHtml(order.userEmail)}</small></td>
+      <td>${(order.items || []).map((item) => `${escapeHtml(item.name)} x ${item.quantity}`).join("<br/>")}</td>
+      <td>${money(order.totalAmount)}<br/><small>${escapeHtml(order.paymentMode || "COD")}</small></td>
+      <td>
+        <select class="select" onchange="updateOrderStatus('${order.id}', this.value)">
+          ${["PLACED", "CONFIRMED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"]
+            .map((status) => `<option value="${status}" ${order.status === status ? "selected" : ""}>${statusText(status)}</option>`)
+            .join("")}
+        </select>
+      </td>
+      <td>
+        <div class="admin-actions">
+          <button class="icon-button" type="button" onclick="openOrderModal('${order.id}')" aria-label="View order"><i data-lucide="eye"></i></button>
+          <button class="icon-button" type="button" onclick="printAdminInvoice('${order.id}')" aria-label="Invoice"><i data-lucide="receipt-text"></i></button>
+          ${order.status !== "DELIVERED" && order.status !== "CANCELLED" ? `<button class="icon-button" type="button" onclick="cancelAdminOrder('${order.id}')" aria-label="Cancel"><i data-lucide="x"></i></button>` : ""}
+        </div>
+      </td>
+    </tr>
+  `;
+}
 
-  body.innerHTML = adminOrders.length
-    ? adminOrders
-        .map(
-          (order) => `
-            <tr>
-              <td><strong>${escapeHtml(order.id?.slice(-8) || "")}</strong><br/><small>${formatDateTime(order.orderTime)}</small></td>
-              <td>${escapeHtml(order.customerName || order.userEmail)}<br/><small class="muted">${escapeHtml(order.userEmail)}</small></td>
-              <td>${(order.items || []).map((item) => `${escapeHtml(item.name)} x ${item.quantity}`).join("<br/>")}</td>
-              <td>${money(order.totalAmount)}<br/><small>${escapeHtml(order.paymentMode || "COD")}</small></td>
-              <td>
-                <select class="select" onchange="updateOrderStatus('${order.id}', this.value)">
-                  ${["PLACED", "CONFIRMED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"]
-                    .map((status) => `<option value="${status}" ${order.status === status ? "selected" : ""}>${statusText(status)}</option>`)
-                    .join("")}
-                </select>
-              </td>
-              <td>
-                <div class="admin-actions">
-                  <button class="icon-button" type="button" onclick="openOrderModal('${order.id}')" aria-label="View order"><i data-lucide="eye"></i></button>
-                  <button class="icon-button" type="button" onclick="printAdminInvoice('${order.id}')" aria-label="Invoice"><i data-lucide="receipt-text"></i></button>
-                  ${order.status !== "DELIVERED" && order.status !== "CANCELLED" ? `<button class="icon-button" type="button" onclick="cancelAdminOrder('${order.id}')" aria-label="Cancel"><i data-lucide="x"></i></button>` : ""}
-                </div>
-              </td>
-            </tr>
-          `
-        )
-        .join("")
-    : `<tr><td colspan="6">No orders yet.</td></tr>`;
+// Server-side paging: reset=true reloads page 0 (also used after filter changes), false appends the next page.
+async function loadAdminOrders(reset = true) {
+  const body = document.getElementById("orderTable");
+  const more = document.getElementById("adminOrdersMore");
+  if (reset) adminOrdersPage = 0;
+  else adminOrdersPage += 1;
+
+  const params = new URLSearchParams({ page: adminOrdersPage, size: 10 });
+  const status = document.getElementById("adminOrderStatus")?.value;
+  const q = document.getElementById("adminOrderSearch")?.value.trim();
+  if (status) params.append("status", status);
+  if (q) params.append("q", q);
+
+  const data = await apiFetch(`${API.ADMIN_ORDERS_PAGE}?${params}`);
+  const items = data?.items || [];
+  adminOrders = reset ? items : adminOrders.concat(items);
+
+  if (reset) {
+    body.innerHTML = items.length ? "" : `<tr><td colspan="6">No orders found.</td></tr>`;
+  }
+  body.insertAdjacentHTML("beforeend", items.map(adminOrderRow).join(""));
+  if (more) more.style.display = data?.hasMore ? "inline-flex" : "none";
   refreshIcons();
 }
 
@@ -284,6 +313,8 @@ function openOrderModal(orderId) {
         <h3>Bill</h3>
         <p>Subtotal: ${money(order.subtotalAmount || order.totalAmount + (order.discountAmount || 0))}</p>
         <p>Discount: ${money(order.discountAmount || 0)} ${order.couponCode ? `(${escapeHtml(order.couponCode)})` : ""}</p>
+        <p>GST: ${money(order.taxAmount || 0)}</p>
+        <p>Delivery fee: ${money(order.deliveryFee || 0)}</p>
         <h3>Payable: ${money(order.totalAmount)}</h3>
       </div>
     </div>
