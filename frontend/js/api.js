@@ -1,7 +1,7 @@
 // Local development talks to the local backend; any other host uses the deployed one.
 const BASE_URL = ["localhost", "127.0.0.1", ""].includes(window.location.hostname)
   ? "http://localhost:8080"
-  : "https://food-backend-vzp9.onrender.com";
+  : "https://food-delivery-website-updated-version.onrender.com";
 
 const API = {
   REGISTER: `${BASE_URL}/api/auth/register`,
