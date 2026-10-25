@@ -1,0 +1,6 @@
+frontend/
+docs/
+*.md
+.git
+.vscode
+backend/target
