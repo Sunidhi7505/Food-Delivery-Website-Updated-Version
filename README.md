@@ -1,5 +1,5 @@
 
-#### Live on - https://food-store-management.vercel.app/register.html
+#### Live on - https://food-delivery-website-updated-versi.vercel.app/
 
 #### Roles - Admin and Customer 
 
